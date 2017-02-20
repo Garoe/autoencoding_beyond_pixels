@@ -35,3 +35,23 @@ Our method would never have gotten off the ground without the insights gained fr
  - Joost van Amersfoort's VAE implementations ([Theano](https://github.com/y0ast/Variational-Autoencoder) and [Torch](https://github.com/y0ast/VAE-Torch)).
  - [Ian Goodfellow's GAN implementation](https://github.com/goodfeli/adversarial).
  - [Parmesan](https://github.com/casperkaae/parmesan)
+
+### Install commands
+ - mkdir larsen && cd larsen
+ - virtualenv venv && source venv/bin/activate
+ - export PYTHONPATH=
+ - pip install numpy cython scipy joblib scikit-image pillow matplotlib
+ - git clone https://github.com/andersbll/cudarray.git
+ - mkdir -p cudarrayInstall/lib
+ - export INSTALL_PREFIX=$(pwd)/cudarrayInstall
+ - export CUDA_PREFIX=/usr/local/cuda
+ - export CUDNN_ENABLED=1
+ - cd cudarray && make -j8 && make install
+ - python setup.py install && cd ..
+ - # LD_LIBRARY_PATH is needed for cudarray, consider adding to bashrc
+ - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/cudarrayInstall/lib
+ - git clone https://github.com/andersbll/deeppy.git
+ - cd deeppy && python setup.py install && cd ..
+ - git clone https://github.com/andersbll/autoencoding_beyond_pixels.git
+ - cd autoencoding_beyond_pixels
+ - python celeba_aegan.py
