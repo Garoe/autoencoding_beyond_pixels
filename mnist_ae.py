@@ -59,7 +59,7 @@ def run():
     else:
         print('Starting from %s' % start_arch_path)
         with open(start_arch_path, 'rb') as f:
-            decoder, discriminator = pickle.load(f)
+            encoder, latent_encoder, decoder = pickle.load(f)
 
     model = ae.Autoencoder(
         encoder=encoder,
@@ -115,7 +115,7 @@ def run():
         pass
     print('Saving model to disk')
     with open(arch_path, 'wb') as f:
-        pickle.dump((decoder, discriminator), f)
+        pickle.dump((encoder, latent_encoder, decoder), f)
 
     model.phase = 'test'
     n_examples = 100
@@ -126,3 +126,4 @@ def run():
 
 if __name__ == '__main__':
     run()
+
