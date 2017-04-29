@@ -13,10 +13,11 @@ from dataset.util import img_transform, img_inverse_transform
 
 
 def run():
+
     experiment_name = 'celeba'
 
     img_size = 64
-    epoch_size = 250
+    epoch_size = 1
     batch_size = 2000
 
     n_hidden = 128
@@ -42,7 +43,8 @@ def run():
     )
 
     save_dir = os.path.join(output_dir, 'User-Testing')
-    os.mkdir(save_dir)
+    if not os.path.expanduser(save_dir):
+        os.mkdir(save_dir)
 
     original_x = np.array(test_feed.batches().next()[0])
     samples_z = np.random.normal(size=(len(original_x), n_hidden))
