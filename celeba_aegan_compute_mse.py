@@ -57,6 +57,11 @@ def run():
         j += 1
     mse_train /= batch_size * j
 
+    c = -0.5 * np.log(2 * np.pi)
+    sigma = 1.0
+    multiplier = 1.0 / (2.0 * sigma ** 2)
+
+    nll_test = 0.0
     mse_test = 0.0
     j = 0
     for batch in test_feed.batches():
@@ -65,14 +70,40 @@ def run():
         recon_x = model.decode(model.encode(original_x))
 
         mse_test += np.sum(np.mean((original_x - recon_x) ** 2, axis=(1, 2, 3)))
+
+        # c - multiplier*(pred - target)**2
+        tmp = original_x - recon_x
+        tmp **= 2.0
+        tmp *= -multiplier
+        tmp += c
+
+        # axis = tuple(range(1, len(original_x.shape)))
+        # nll_test += np.sum(tmp, axis=axis)
+        nll_test += np.sum(tmp)
+
         j += 1
     mse_test /= batch_size * j
+    nll_test /= batch_size * j
 
     total_time = time.time() - t
-    print("MSE train: {}, MSE test: {}, time: {} minutes".format(mse_train, mse_test, total_time / (60)))
-    # ((x + 1)/2 - (y + 1)/2)^2 = (x/2 - y/2)^2 = ((x - y)*1/2)^2 = [(x - y)^2]*[(1/2)^2] = (1/4)*(x-y)**2
-    print("MSE for [0,1]: {}, num batches: {}, num samples: {}".format(mse_test/4.0, j, test_feed.n_samples))
-    np.save(os.path.join(save_dir, 'mse.npy'), [mse_train, mse_test, total_time])
+
+    def print_write(file, line):
+        print(line)
+        file.write(line)
+
+    with open(os.path.join(save_dir, 'mse.txt'), "w") as file:
+        line = "MSE train: {}, MSE test: {}, time: {} minutes".format(mse_train, mse_test, total_time / (60))
+        print_write(file, line)
+
+        line = "NLL test: {}".format(nll_test)
+        print_write(file, line)
+
+        # ((x + 1)/2 - (y + 1)/2)^2 = (x/2 - y/2)^2 = ((x - y)*1/2)^2 = [(x - y)^2]*[(1/2)^2] = (1/4)*(x-y)**2
+        line = "MSE for [0,1]: {}, num batches: {}, num samples: {}".format(mse_test / 4.0, j, test_feed.n_samples)
+        print_write(file, line)
+
+    np.save(os.path.join(save_dir, 'mse.npy'), [mse_train, mse_test, nll_test, total_time])
+
 
 if __name__ == '__main__':
     run()
