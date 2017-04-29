@@ -89,17 +89,27 @@ def run():
 
     def print_write(file, line):
         print(line)
-        file.write(line)
+        file.write(line + "\n")
 
     with open(os.path.join(save_dir, 'mse.txt'), "w") as file:
-        line = "MSE train: {}, MSE test: {}, time: {} minutes".format(mse_train, mse_test, total_time / (60))
+        line = "Num batches: {}, num samples: {}, time: {} minutes".format(j, test_feed.n_samples, total_time / 60.0)
+        print_write(file, line)
+
+        line = "MSE train: {}, MSE test: {}".format(mse_train, mse_test)
         print_write(file, line)
 
         line = "NLL test: {}".format(nll_test)
         print_write(file, line)
 
-        # ((x + 1)/2 - (y + 1)/2)^2 = (x/2 - y/2)^2 = ((x - y)*1/2)^2 = [(x - y)^2]*[(1/2)^2] = (1/4)*(x-y)**2
-        line = "MSE for [0,1]: {}, num batches: {}, num samples: {}".format(mse_test / 4.0, j, test_feed.n_samples)
+        # ((x + 1)/2 - (y + 1)/2)^2 = (x/2 - y/2)^2 = ((x - y)*1/2)^2 = [(x - y)^2]*[(1/2)^2] = (1/4)*(x-y)^2
+        line = "MSE for [0,1]: {}".format(mse_test / 4.0)
+        print_write(file, line)
+
+        # ((x*255 - y * 255)^2 = (255^2) * (x-y)^2
+        line = "MSE for [0,255]: {}".format(mse_test * (255 ** 2))
+        print_write(file, line)
+
+        line = "L2 error for [0,1]: {}".format(np.sqrt(mse_test / 4.0))
         print_write(file, line)
 
     np.save(os.path.join(save_dir, 'mse.npy'), [mse_train, mse_test, nll_test, total_time])
