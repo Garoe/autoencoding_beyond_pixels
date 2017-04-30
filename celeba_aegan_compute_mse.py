@@ -7,6 +7,7 @@ import time
 
 import dataset.celeba
 import aegan
+from dataset.util import img_inverse_transform
 
 
 def run():
@@ -57,12 +58,22 @@ def run():
         j += 1
     mse_train /= batch_size * j
 
+    # NLL code from model/ae.py NLLNormal class
     c = -0.5 * np.log(2 * np.pi)
     sigma = 1.0
     multiplier = 1.0 / (2.0 * sigma ** 2)
 
     nll_test = 0.0
     mse_test = 0.0
+
+    # Sanity checks on different ways to compute the mse
+    # The 0_255 version will be a bit off because the network output is float and the img_inverse_transform function
+    # will clamp the values to uint8, loosing some information in the process
+    compute_extra_mse = False
+    mse_test_mean_ite = 0.0
+    mse_test_0_1 = 0.0
+    mse_test_255 = 0.0
+
     j = 0
     for batch in test_feed.batches():
         original_x = np.array(batch[0])
@@ -70,6 +81,14 @@ def run():
         recon_x = model.decode(model.encode(original_x))
 
         mse_test += np.sum(np.mean((original_x - recon_x) ** 2, axis=(1, 2, 3)))
+
+        if compute_extra_mse:
+            mse_test_mean_ite += np.mean(np.mean((original_x - recon_x) ** 2, axis=(1, 2, 3)))
+            mse_test_0_1 += np.sum(np.mean(((original_x - recon_x)*0.5) ** 2, axis=(1, 2, 3)))
+
+            original_x_255 = img_inverse_transform(original_x).astype(original_x.dtype)
+            recon_x_255 = img_inverse_transform(recon_x).astype(recon_x.dtype)
+            mse_test_255 += np.sum(np.mean((original_x_255 - recon_x_255) ** 2, axis=(1, 2, 3)))
 
         # c - multiplier*(pred - target)**2
         tmp = original_x - recon_x
@@ -83,6 +102,9 @@ def run():
 
         j += 1
     mse_test /= batch_size * j
+    mse_test_mean_ite /= j
+    mse_test_0_1 /= batch_size * j
+    mse_test_255 /= batch_size * j
     nll_test /= batch_size * j
 
     total_time = time.time() - t
@@ -95,21 +117,18 @@ def run():
         line = "Num batches: {}, num samples: {}, time: {} minutes".format(j, test_feed.n_samples, total_time / 60.0)
         print_write(file, line)
 
-        line = "MSE train: {}, MSE test: {}".format(mse_train, mse_test)
+        line = "MSE train: {}, MSE test: {}, with mean per ite {} ".format(mse_train, mse_test, mse_test_mean_ite)
         print_write(file, line)
 
         line = "NLL test: {}".format(nll_test)
         print_write(file, line)
 
         # ((x + 1)/2 - (y + 1)/2)^2 = (x/2 - y/2)^2 = ((x - y)*1/2)^2 = [(x - y)^2]*[(1/2)^2] = (1/4)*(x-y)^2
-        line = "MSE for [0,1]: {}".format(mse_test / 4.0)
+        line = "MSE for [0,1]: {}, hardcoded {}".format(mse_test / 4.0, mse_test_0_1)
         print_write(file, line)
 
-        # ((x*255 - y * 255)^2 = (255^2) * (x-y)^2
-        line = "MSE for [0,255]: {}".format(mse_test * (255 ** 2))
-        print_write(file, line)
-
-        line = "L2 error for [0,1]: {}".format(np.sqrt(mse_test / 4.0))
+        # (((x + 1)*0.5*255 - (y +1) 0.5* 255)^2 = ((0.5*255)^2) * (x-y)^2
+        line = "MSE for [0,255]: {}, hardcoded {}".format(mse_test * ((0.5*255) ** 2), mse_test_255)
         print_write(file, line)
 
     np.save(os.path.join(save_dir, 'mse.npy'), [mse_train, mse_test, nll_test, total_time])
