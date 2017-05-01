@@ -14,8 +14,8 @@ def run():
     experiment_name = 'celeba'
 
     img_size = 64
-    epoch_size = 1
-    batch_size = 64
+    epoch_size = 25
+    batch_size = 18 # This batch size divides the test data without remainder
 
     n_hidden = 128
     _, experiment_name = aegan.build_model(
@@ -65,6 +65,8 @@ def run():
 
     nll_test = 0.0
     mse_test = 0.0
+    mse_array = np.zeros(test_feed.n_samples*epoch_size)
+    mse_array_255 = np.zeros(test_feed.n_samples*epoch_size)
 
     # Sanity checks on different ways to compute the mse
     # The 0_255 version will be a bit off because the network output is float and the img_inverse_transform function
@@ -75,36 +77,45 @@ def run():
     mse_test_255 = 0.0
 
     j = 0
-    for batch in test_feed.batches():
-        original_x = np.array(batch[0])
+    t = time.time()
+    for i in xrange(epoch_size):
+        print(i,epoch_size,time.time() - t)
+        t = time.time()
+        for batch in test_feed.batches():
+            original_x = np.array(batch[0])
 
-        recon_x = model.decode(model.encode(original_x))
+            recon_x = model.decode(model.encode(original_x))
 
-        mse_test += np.sum(np.mean((original_x - recon_x) ** 2, axis=(1, 2, 3)))
+            mse_array[j*batch_size:(j+1)*batch_size] = np.mean((original_x - recon_x) ** 2, axis=(1, 2, 3))
+            mse_test += np.sum(mse_array[j*batch_size:(j+1)*batch_size])
 
-        if compute_extra_mse:
-            mse_test_mean_ite += np.mean(np.mean((original_x - recon_x) ** 2, axis=(1, 2, 3)))
-            mse_test_0_1 += np.sum(np.mean(((original_x - recon_x)*0.5) ** 2, axis=(1, 2, 3)))
+
+            if compute_extra_mse:
+                mse_test_mean_ite += np.mean(np.mean((original_x - recon_x) ** 2, axis=(1, 2, 3)))
+                mse_test_0_1 += np.sum(np.mean(((original_x - recon_x)*0.5) ** 2, axis=(1, 2, 3)))
 
             original_x_255 = img_inverse_transform(original_x).astype(original_x.dtype)
             recon_x_255 = img_inverse_transform(recon_x).astype(recon_x.dtype)
-            mse_test_255 += np.sum(np.mean((original_x_255 - recon_x_255) ** 2, axis=(1, 2, 3)))
+            mse_array_255[j*batch_size:(j+1)*batch_size] = np.mean((original_x_255 - recon_x_255) ** 2, axis=(1, 2, 3))
+            mse_test_255 += np.sum(mse_array_255[j*batch_size:(j+1)*batch_size])
 
-        # c - multiplier*(pred - target)**2
-        tmp = original_x - recon_x
-        tmp **= 2.0
-        tmp *= -multiplier
-        tmp += c
+            # c - multiplier*(pred - target)**2
+            tmp = original_x - recon_x
+            tmp **= 2.0
+            tmp *= -multiplier
+            tmp += c
 
-        # axis = tuple(range(1, len(original_x.shape)))
-        # nll_test += np.sum(tmp, axis=axis)
-        nll_test += np.sum(tmp)
+            # axis = tuple(range(1, len(original_x.shape)))
+            # nll_test += np.sum(tmp, axis=axis)
+            nll_test += np.sum(tmp)
 
-        j += 1
+            j += 1
     mse_test /= batch_size * j
+    mse_test_std = np.std(mse_array)
     mse_test_mean_ite /= j
     mse_test_0_1 /= batch_size * j
-    mse_test_255 /= batch_size * j
+    mse_test_std_255 = mse_array_255.std()
+    mse_test_255 = mse_array_255.mean()
     nll_test /= batch_size * j
 
     total_time = time.time() - t
@@ -113,11 +124,11 @@ def run():
         print(line)
         file.write(line + "\n")
 
-    with open(os.path.join(save_dir, 'mse.txt'), "w") as file:
+    with open(os.path.join(save_dir, 'mse{}.txt'.format(epoch_size)), "w") as file:
         line = "Num batches: {}, num samples: {}, time: {} minutes".format(j, test_feed.n_samples, total_time / 60.0)
         print_write(file, line)
 
-        line = "MSE train: {}, MSE test: {}, with mean per ite {} ".format(mse_train, mse_test, mse_test_mean_ite)
+        line = "MSE train: {}, MSE test: +-{}, with mean per ite {} ".format(mse_train, mse_test, mse_test_std, mse_test_mean_ite)
         print_write(file, line)
 
         line = "NLL test: {}".format(nll_test)
@@ -128,10 +139,12 @@ def run():
         print_write(file, line)
 
         # (((x + 1)*0.5*255 - (y +1) 0.5* 255)^2 = ((0.5*255)^2) * (x-y)^2
-        line = "MSE for [0,255]: {}, hardcoded {}".format(mse_test * ((0.5*255) ** 2), mse_test_255)
+        line = "MSE for [0,255]: {} +-{}, hardcoded {}".format(mse_test * ((0.5*255) ** 2), mse_test_std_255, mse_test_255)
         print_write(file, line)
 
-    np.save(os.path.join(save_dir, 'mse.npy'), [mse_train, mse_test, nll_test, total_time])
+
+    np.savez(os.path.join(save_dir, 'mse{}.npz'.format(epoch_size)), mse_train=mse_train, mse_test=mse_test, nll_test=nll_test,
+             total_time=total_time, mse_test_std=mse_test_std, mse_array=mse_array, mse_array_255=mse_array_255)
 
 
 if __name__ == '__main__':
